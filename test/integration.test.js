@@ -111,4 +111,37 @@ describe('Server Integration Tests (Real Services)', function () {
         expect(mqMsg).to.have.property('content', 'Hello from Integration Test');
         expect(mqMsg.senderID.toString()).to.equal(user1Id.toString());
     });
+
+    it('should show mutual friendship when A adds B', async function () {
+        // Register and Login User A (Alice)
+        socket.emit('register', { username: 'alice', name: 'Alice', password: 'password' });
+        await new Promise(r => socket.once('register_status', r));
+        socket.emit('login', { username: 'alice', password: 'password' });
+        const loginAlice = await new Promise(r => socket.once('login_resp', r));
+        const aliceId = loginAlice.userId;
+
+        // Register and Login User B (Bob)
+        socket.emit('register', { username: 'bob', name: 'Bob', password: 'password' });
+        await new Promise(r => socket.once('register_status', r));
+        socket.emit('login', { username: 'bob', password: 'password' });
+        const loginBob = await new Promise(r => socket.once('login_resp', r));
+        const bobId = loginBob.userId;
+
+        // Alice adds Bob as friend
+        socket.emit('add_friend', { uname: 'alice', fname: 'bob' });
+        const addStatus = await new Promise(r => socket.once('add_friend_resp', r));
+        expect(addStatus).to.equal(200);
+
+        // Fetch Alice's friend list - should include Bob
+        socket.emit('find_friend', { userID: aliceId });
+        const aliceFriends = await new Promise(r => socket.once('find_friend_resp', r));
+        expect(aliceFriends).to.be.an('array');
+        expect(aliceFriends.some(f => f.username === 'bob')).to.be.true;
+
+        // Fetch Bob's friend list - should include Alice
+        socket.emit('find_friend', { userID: bobId });
+        const bobFriends = await new Promise(r => socket.once('find_friend_resp', r));
+        expect(bobFriends).to.be.an('array');
+        expect(bobFriends.some(f => f.username === 'alice')).to.be.true;
+    });
 });

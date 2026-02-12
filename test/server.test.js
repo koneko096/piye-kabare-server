@@ -4,17 +4,30 @@ const proxyquire = require('proxyquire').noCallThru();
 const EventEmitter = require('events');
 
 describe('Socket.io Server Listeners (Stubbed)', function () {
-    let userQStub, sessionQStub, socketStub;
+    let userServiceStub, roomServiceStub, chatServiceStub, socketStub;
     let registerHandler, loginHandler;
 
     beforeEach(function () {
-        userQStub = {
-            find: sinon.stub(),
+        userServiceStub = {
             register: sinon.stub(),
-            login: sinon.stub()
+            login: sinon.stub(),
+            getUserData: sinon.stub(),
+            addFriend: sinon.stub(),
+            findFriends: sinon.stub(),
+            findUser: sinon.stub()
         };
-        sessionQStub = {
-            create: sinon.stub()
+        roomServiceStub = {
+            findRooms: sinon.stub(),
+            createRoom: sinon.stub(),
+            getOrCreatePrivateRoom: sinon.stub(),
+            findMembers: sinon.stub(),
+            addMember: sinon.stub(),
+            kickMember: sinon.stub()
+        };
+        chatServiceStub = {
+            sendMessage: sinon.stub(),
+            getMessages: sinon.stub(),
+            parseCommand: sinon.stub()
         };
 
         socketStub = new EventEmitter();
@@ -27,10 +40,9 @@ describe('Socket.io Server Listeners (Stubbed)', function () {
 
         // Load index.js with stubs
         proxyquire('../index.js', {
-            './queries/user': userQStub,
-            './queries/session': sessionQStub,
-            './models/user': function (data) { return data; }, // Mock User constructor
-            './models/session': function (data) { return data; }, // Mock Session constructor
+            './services/userService': userServiceStub,
+            './services/roomService': roomServiceStub,
+            './services/chatService': chatServiceStub,
             'amqplib/callback_api': amqpStub,
             'socket.io': function () {
                 return {
@@ -69,7 +81,7 @@ describe('Socket.io Server Listeners (Stubbed)', function () {
     };
 
     it('should emit 300 if user already registered', async function () {
-        userQStub.find.resolves([{ id: 'existing-id' }]);
+        userServiceStub.register.rejects({ status: 300 });
 
         registerHandler({ username: 'testuser' });
         const args = await waitForEmit(socketStub, 'register_status');
@@ -78,18 +90,17 @@ describe('Socket.io Server Listeners (Stubbed)', function () {
     });
 
     it('should emit 200 on successful registration', async function () {
-        userQStub.find.resolves([]);
-        userQStub.register.resolves('new-id');
+        userServiceStub.register.resolves({ status: 200 });
 
         registerHandler({ username: 'newuser', name: 'New User' });
         const args = await waitForEmit(socketStub, 'register_status');
 
-        expect(userQStub.register.calledOnce).to.be.true;
+        expect(userServiceStub.register.calledOnce).to.be.true;
         expect(args[0]).to.equal(200);
     });
 
     it('should emit 401 on failed login', async function () {
-        userQStub.login.resolves([]);
+        userServiceStub.login.rejects({ status: 401 });
 
         loginHandler({ username: 'user', password: 'wrong' });
         const args = await waitForEmit(socketStub, 'login_resp');
@@ -98,14 +109,13 @@ describe('Socket.io Server Listeners (Stubbed)', function () {
     });
 
     it('should emit user data and session on successful login', async function () {
-        const mockUser = { id: 'user-id', username: 'user', name: 'Test' };
-        userQStub.login.resolves([mockUser]);
-        sessionQStub.create.resolves('mock-token');
+        const mockResponse = { userId: 'user-id', username: 'user', name: 'Test', sessionId: 'mock-token' };
+        userServiceStub.login.resolves({ status: 200, data: mockResponse });
 
         loginHandler({ username: 'user', password: 'correct' });
         const args = await waitForEmit(socketStub, 'login_resp');
 
-        expect(sessionQStub.create.calledOnce).to.be.true;
+        expect(userServiceStub.login.calledOnce).to.be.true;
         expect(args[0]).to.deep.include({
             userId: 'user-id',
             sessionId: 'mock-token'
