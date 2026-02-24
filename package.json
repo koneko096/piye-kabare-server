@@ -17,7 +17,7 @@
     "lodash": "^4.17.21",
     "mongoose": "^9.1.6",
     "socket.io": "^4.8.1",
-    "uuid": "^10.0.0"
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "chai": "^6.2.2",
