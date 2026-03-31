@@ -26,6 +26,7 @@ COPY config ./config
 COPY helpers ./helpers
 COPY models ./models
 COPY queries ./queries
+COPY services ./services
 COPY public ./public
 COPY index.js ./
 
