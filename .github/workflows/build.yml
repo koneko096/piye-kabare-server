@@ -1,5 +1,4 @@
-name: Build and push
-
+name: Build and deploy
 on:
   push:
     branches: [ master ]
@@ -9,7 +8,7 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/piye-kabare-server
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,9 +36,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
+            type=sha,prefix=master-
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
@@ -56,11 +53,38 @@ jobs:
       - name: Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           format: 'sarif'
           output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
 
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
+        if: always() # Upload even if vulnerabilities are found
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: trivy-results.sarif
+
+      - name: Deploy to GCP VM
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.GCP_VM_HOST }}
+          username: ${{ secrets.GCP_VM_USER }}
+          key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
+          script: |
+            # Login using your GH_PAT for persistent access
+            echo "${{ secrets.GH_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+
+            # Pull latest and restart
+            docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
+            docker stop piye-kabare-server || true
+            docker rm piye-kabare-server || true
+
+            # Match the port 8083 from your Dockerfile
+            docker run -d \
+              --name piye-kabare-server \
+              --restart unless-stopped \
+              -p 8083:8083 \
+              ghcr.io/${{ env.IMAGE_NAME }}:latest
+
+            # CRITICAL: Clean up old images to save GCP Free Tier disk space
+            docker image prune -f
