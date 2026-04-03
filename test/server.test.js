@@ -2,12 +2,16 @@ const { expect } = require('chai');
 const sinon = require('sinon');
 const proxyquire = require('proxyquire').noCallThru();
 const EventEmitter = require('events');
+const mongoose = require('mongoose');
 
 describe('Socket.io Server Listeners (Stubbed)', function () {
     let userServiceStub, roomServiceStub, chatServiceStub, socketStub;
+    let roomUserQStub, roomQStub;
     let registerHandler, loginHandler;
 
     beforeEach(function () {
+        sinon.stub(mongoose, 'connect').resolves();
+
         userServiceStub = {
             register: sinon.stub(),
             login: sinon.stub(),
@@ -34,8 +38,35 @@ describe('Socket.io Server Listeners (Stubbed)', function () {
         socketStub.id = 'test-socket-id';
         socketStub.emit = sinon.stub();
 
+        roomUserQStub = {
+            find: sinon.stub().resolves([])
+        };
+        roomQStub = {
+            find: sinon.stub().resolves([])
+        };
+        const fakeChannel = {
+            assertExchange: sinon.stub(),
+            assertQueue: sinon.stub(),
+            bindQueue: sinon.stub().callsFake((queue, exchange, key, cb) => {
+                if (typeof cb === "function") {
+                    cb(null);
+                }
+            }),
+            consume: sinon
+                .stub()
+                .callsArgWith(3, null, { consumerTag: "consumer-tag" }),
+            cancel: sinon.stub().callsArgWith(1, null),
+            unbindQueue: sinon.stub().callsArgWith(4, null),
+            publish: sinon.stub(),
+        };
+        const fakeConn = {
+            createChannel: sinon
+                .stub()
+                .callsArgWith(0, null, fakeChannel),
+            close: sinon.stub(),
+        };
         const amqpStub = {
-            connect: sinon.stub()
+            connect: sinon.stub().callsArgWith(1, null, fakeConn),
         };
 
         // Load index.js with stubs
@@ -43,6 +74,8 @@ describe('Socket.io Server Listeners (Stubbed)', function () {
             './services/userService': userServiceStub,
             './services/roomService': roomServiceStub,
             './services/chatService': chatServiceStub,
+            './queries/roomuser': roomUserQStub,
+            './queries/room': roomQStub,
             'amqplib/callback_api': amqpStub,
             'socket.io': function () {
                 return {

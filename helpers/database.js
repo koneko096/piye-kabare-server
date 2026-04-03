@@ -12,13 +12,8 @@ exports.connect = function (database) {
   if (mongoose.connection.readyState === 0) {
     mongoose.Promise = global.Promise;
 
-    switch (database) {
-      case 'test':
-        mongoose.connect(configDB.testUrl);
-        break;
-      default:
-        mongoose.connect(configDB.url);
-    };
-
+    const useTestDb = process.env.NODE_ENV === 'test' || database === 'test';
+    const targetUrl = useTestDb ? configDB.testUrl : configDB.url;
+    mongoose.connect(targetUrl);
   }
 };

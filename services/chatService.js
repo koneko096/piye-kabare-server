@@ -2,16 +2,28 @@ var Message = require('../models/message');
 var messageQ = require('../queries/message');
 var roomuserQ = require('../queries/roomuser');
 var userQ = require('../queries/user');
+var roomQ = require('../queries/room');
 var _ = require('lodash');
 
 exports.sendMessage = function (messageData) {
     var MessageModel = _.pick(messageData, ['senderID', 'roomID', 'content']);
     return messageQ.send(new Message(MessageModel)).then(function (res) {
-        return roomuserQ.find({ roomId: res.roomID }).then(function (res2) {
-            var list = _.filter(res2, function (item) {
-                return item.userId.toString() !== MessageModel.senderID.toString();
-            }).map(function (item) { return item.userId; });
-            return { msg: res, notifyList: list };
+        return userQ.find({ _id: MessageModel.senderID }).then(function (users) {
+            var payload = res;
+            if (users && users[0]) {
+                payload = res.toObject ? res.toObject() : res;
+                payload.senderName = users[0].name;
+                payload.senderUsername = users[0].username;
+            }
+            return roomQ.find({ _id: res.roomID }).then(function (roomRes) {
+                var isGroup = !!(roomRes && roomRes[0] && roomRes[0].adminId);
+                return roomuserQ.find({ roomId: res.roomID }).then(function (res2) {
+                    var list = _.filter(res2, function (item) {
+                        return item.userId.toString() !== MessageModel.senderID.toString();
+                    }).map(function (item) { return item.userId; });
+                    return { msg: payload, notifyList: list, isGroup: isGroup };
+                });
+            });
         });
     });
 };
@@ -27,8 +39,8 @@ exports.getMessages = function (messageOpt) {
                     roomID: item.roomID,
                     content: item.content,
                     createdAt: item.createdAt,
-                    username: res2[0].username,
-                    name: res2[0].name
+                    senderUsername: res2[0].username,
+                    senderName: res2[0].name
                 };
             });
         });

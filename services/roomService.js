@@ -64,7 +64,7 @@ exports.getOrCreatePrivateRoom = function (roomData) {
                 findRoomPromise = findRoomPromise.then(function (foundRoomId) {
                     if (foundRoomId) return foundRoomId;
                     return roomuserQ.find({ userId: userId2, roomId: res[index].roomId }).then(function (resz) {
-                        if (resz.length > 0) return resz[0].roomId;
+                        if (resz.length > 0) return { id: resz[0].roomId, name: roomData.nameGroup, created: false, members: [userId1, userId2] };
                         if (index === res.length - 1) return createPrivateRoom(roomData);
                         return null;
                     });
@@ -82,7 +82,7 @@ function createPrivateRoom(roomData) {
         var roomUserData2 = { roomId: res, userId: roomData.userId2 };
         return roomuserQ.add(new RoomUser(roomUserData1)).then(function () {
             return roomuserQ.add(new RoomUser(roomUserData2)).then(function () {
-                return res;
+                return { id: res, name: roomData.nameGroup, created: true, members: [roomData.userId1, roomData.userId2] };
             });
         });
     });
@@ -136,7 +136,7 @@ exports.addMember = function (roomUserData) {
                                         return item.userId.toString() !== RoomUserModel.userId.toString();
                                     }).map(function (item) { return item.userId; });
 
-                                    resolve({ status: 200, res: res, notifyList: list });
+                                    resolve({ status: 200, res: res, notifyList: list, addedUserId: RoomUserModel.userId, roomId: RoomUserModel.roomId });
                                 });
                             })
                             .catch(function (err) {
@@ -174,7 +174,7 @@ exports.kickMember = function (roomUserData) {
                                 var list = _.map(res2, function (item) {
                                     return item.userId;
                                 });
-                                resolve({ status: 200, notifyList: list });
+                                resolve({ status: 200, notifyList: list, removedUserId: userId, roomId: roomUserData.roomId });
                             });
                         })
                         .catch(function (err) {

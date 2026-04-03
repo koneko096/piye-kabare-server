@@ -7,6 +7,8 @@ describe('ChatService', function () {
     var chatService;
     var messageQStub;
     var roomuserQStub;
+    var userQStub;
+    var roomQStub;
 
     beforeEach(function () {
         messageQStub = {
@@ -16,16 +18,26 @@ describe('ChatService', function () {
         roomuserQStub = {
             find: sinon.stub()
         };
+        userQStub = {
+            find: sinon.stub()
+        };
+        roomQStub = {
+            find: sinon.stub()
+        };
 
         chatService = proxyquire('../../services/chatService', {
             '../queries/message': messageQStub,
-            '../queries/roomuser': roomuserQStub
+            '../queries/roomuser': roomuserQStub,
+            '../queries/user': userQStub,
+            '../queries/room': roomQStub
         });
     });
 
     describe('sendMessage', function () {
         it('should send a message and returned notify list', function () {
             messageQStub.send.resolves({ roomID: 'room1', content: 'hello', senderID: 'user1' });
+            userQStub.find.resolves([{ name: 'User One', username: 'user1' }]);
+            roomQStub.find.resolves([]);
             roomuserQStub.find.resolves([
                 { userId: 'user1' },
                 { userId: 'user2' }
@@ -33,8 +45,10 @@ describe('ChatService', function () {
 
             return chatService.sendMessage({ senderID: 'user1', roomID: 'room1', content: 'hello' }).then(function (res) {
                 expect(res.msg.content).to.equal('hello');
+                expect(res.msg.senderName).to.equal('User One');
                 expect(res.notifyList).to.have.lengthOf(1);
                 expect(res.notifyList[0]).to.equal('user2');
+                expect(res.isGroup).to.equal(false);
             });
         });
     });
