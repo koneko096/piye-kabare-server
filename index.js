@@ -18,6 +18,27 @@ var roomService = require("./services/roomService");
 var chatService = require("./services/chatService");
 var configAMQP = require("./config/amqp.js");
 
+// Global AMQP variables
+let amqpChannel = null;
+let amqpConnection = null;
+
+// Establish AMQP connection on server start
+amqp.connect(configAMQP.url, function (err, conn) {
+  if (err) {
+    console.error("AMQP Connection Error:", err);
+    return;
+  }
+  amqpConnection = conn;
+  conn.createChannel(function (err, ch) {
+    if (err) {
+      console.error("AMQP Channel Creation Error:", err);
+      return;
+    }
+    amqpChannel = ch;
+    console.log("AMQP connection established and channel created.");
+  });
+});
+
 app.use(express.static(__dirname + "/public"));
 
 app.get("/", function (req, res) {});
@@ -247,21 +268,31 @@ io.on("connection", function (client) {
   });
 
   function notifyViaMQ(targetId, content, datetime, isRaw) {
-    amqp.connect(configAMQP.url, function (err, conn) {
-      if (err) return console.log(err);
-      conn.createChannel(function (err, ch) {
-        if (err) return console.log(err);
-        var q = targetId.toString();
-        var payload = isRaw
-          ? content
-          : JSON.stringify({
-              content: content,
-              datetime: datetime || Date.now(),
-            });
-        ch.assertQueue(q, { durable: false });
-        ch.sendToQueue(q, Buffer.from(payload));
-        console.log(" [x] Sent to " + q + ": " + payload);
-      });
-    });
+    if (!amqpChannel) {
+      console.error("AMQP channel is not available. Cannot send message.");
+      return;
+    }
+
+    var q = targetId.toString();
+    var payload = isRaw
+      ? content
+      : JSON.stringify({
+          content: content,
+          datetime: datetime || Date.now(),
+        });
+
+    // Assert queue before sending to ensure it exists
+    amqpChannel.assertQueue(q, { durable: false });
+    amqpChannel.sendToQueue(q, Buffer.from(payload));
+    console.log(" [x] Sent to " + q + ": " + payload);
   }
+
+  // Ensure the connection is closed when the server stops
+  process.on("SIGINT", () => {
+    if (amqpConnection) {
+      amqpConnection.close();
+      console.log("AMQP connection closed.");
+    }
+    process.exit(0);
+  });
 });

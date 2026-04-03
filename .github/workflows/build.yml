@@ -69,11 +69,12 @@ jobs:
         uses: appleboy/ssh-action@v1
         env:
           MONGODB_URL: ${{ secrets.MONGODB_URL }}
+          AMQP_URL: ${{ secrets.AMQP_URL }}
         with:
           host: ${{ secrets.GCP_VM_HOST }}
           username: ${{ secrets.GCP_VM_USER }}
           key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
-          envs: MONGODB_URL
+          envs: MONGODB_URL,AMQP_URL
           script: |
             # Login using your GH_PAT for persistent access
             echo "${{ secrets.GH_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
@@ -89,6 +90,7 @@ jobs:
               --restart unless-stopped \
               -e MONGODB_URL="$MONGODB_URL" \
               -e NODE_ENV=production \
+              -e AMQP_URL="$AMQP_URL" \
               -p 8083:8083 \
               ghcr.io/${{ env.IMAGE_NAME }}:latest
 
