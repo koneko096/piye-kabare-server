@@ -3,6 +3,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+RUN apk add --no-cache ca-certificates
+
 # Copy package files first to leverage Docker cache
 COPY package*.json ./
 
@@ -15,6 +17,8 @@ RUN npm ci --production
 FROM gcr.io/distroless/nodejs20-debian12:nonroot
 
 WORKDIR /app
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 # Copy node_modules and package.json from builder
 COPY --from=builder /app/node_modules ./node_modules
