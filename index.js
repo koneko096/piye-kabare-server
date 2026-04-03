@@ -16,6 +16,7 @@ require("dotenv").config();
 var userService = require("./services/userService");
 var roomService = require("./services/roomService");
 var chatService = require("./services/chatService");
+var configAMQP = require("./config/amqp.js");
 
 app.use(express.static(__dirname + "/public"));
 
@@ -246,7 +247,7 @@ io.on("connection", function (client) {
   });
 
   function notifyViaMQ(targetId, content, datetime, isRaw) {
-    amqp.connect("amqp://localhost", function (err, conn) {
+    amqp.connect(configAMQP.url, function (err, conn) {
       if (err) return console.log(err);
       conn.createChannel(function (err, ch) {
         if (err) return console.log(err);
